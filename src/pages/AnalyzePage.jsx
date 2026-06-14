@@ -2,15 +2,30 @@ import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { categorizeMessage } from '../utils/llmHelper'
 import { calculateUrgency } from '../utils/urgencyScorer'
-import { getRecommendedAction } from '../utils/templates'
+import { getRecommendedAction, getTeam } from '../utils/templates'
+
+const urgencyStyles = {
+  High: 'bg-rose-50 text-rose-700 ring-rose-600/20',
+  Medium: 'bg-amber-50 text-amber-700 ring-amber-600/20',
+  Low: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
+}
+
+const sentimentStyles = {
+  Positive: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
+  Neutral: 'bg-slate-100 text-slate-600 ring-slate-500/20',
+  Negative: 'bg-rose-50 text-rose-700 ring-rose-600/20',
+}
 
 function AnalyzePage() {
   const [message, setMessage] = useState('')
   const [results, setResults] = useState(null)
+  const [replyDraft, setReplyDraft] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [replyCopied, setReplyCopied] = useState(false)
 
   useEffect(() => {
-    // Check for example message from home page
     const exampleMessage = localStorage.getItem('exampleMessage')
     if (exampleMessage) {
       setMessage(exampleMessage)
@@ -20,168 +35,251 @@ function AnalyzePage() {
 
   const handleAnalyze = async () => {
     if (!message.trim()) {
-      alert('Please enter a message to analyze')
+      setError('Please enter a message to analyze.')
       return
     }
 
+    setError('')
     setIsLoading(true)
     setResults(null)
-    
+
     try {
-      // Run categorization (LLM call)
-      const { category, reasoning } = await categorizeMessage(message)
-      
-      // Calculate urgency (rule-based)
+      const analysis = await categorizeMessage(message)
       const urgency = calculateUrgency(message)
-      
-      // Get recommended action (template-based)
-      const recommendedAction = getRecommendedAction(category)
-      
+      const recommendedAction = getRecommendedAction(analysis.category, urgency)
+      const team = getTeam(analysis.category)
+
       const analysisResult = {
         message,
-        category,
+        ...analysis,
         urgency,
         recommendedAction,
-        reasoning,
-        timestamp: new Date().toISOString()
+        team,
+        timestamp: new Date().toISOString(),
       }
 
       setResults(analysisResult)
+      setReplyDraft(analysisResult.suggestedReply || '')
 
-      // Save to history
       const history = JSON.parse(localStorage.getItem('triageHistory') || '[]')
       history.push(analysisResult)
       localStorage.setItem('triageHistory', JSON.stringify(history))
-    } catch (error) {
-      console.error('Error analyzing message:', error)
-      alert('Error analyzing message. Please try again.')
+    } catch (err) {
+      console.error('Error analyzing message:', err)
+      setError('Something went wrong while analyzing. Please try again.')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // ⌘/Ctrl + Enter to analyze.
+  const handleKeyDown = (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault()
+      handleAnalyze()
     }
   }
 
   const handleClear = () => {
     setMessage('')
     setResults(null)
+    setReplyDraft('')
+    setError('')
+  }
+
+  const handleCopy = () => {
+    const text = `Category: ${results.category}\nUrgency: ${results.urgency}\nSentiment: ${results.sentiment}\nRoute to: ${results.team}\nRecommendation: ${results.recommendedAction}\n\nReasoning: ${results.reasoning}`
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleCopyReply = () => {
+    navigator.clipboard.writeText(replyDraft)
+    setReplyCopied(true)
+    setTimeout(() => setReplyCopied(false), 2000)
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Analyze Customer Message</h1>
-          <p className="text-gray-600 mb-6">
-            Paste a customer support message below to automatically categorize and prioritize.
-          </p>
+    <div className="mx-auto max-w-3xl px-4 py-12">
+      <header className="mb-8">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Analyze message</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Paste a customer message to categorize and prioritize it automatically.
+        </p>
+      </header>
 
-          {/* Input Section */}
-          <div className="mb-4">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Customer Message
-            </label>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Paste customer message here..."
-              className="w-full border border-gray-300 rounded-lg p-3 h-40 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              disabled={isLoading}
-            />
-            <div className="text-sm text-gray-500 mt-1">
-              {message.length} characters
-            </div>
+      {/* Input */}
+      <div className="surface p-5">
+        <div className="mb-1.5 flex items-center justify-between">
+          <label htmlFor="message" className="text-sm font-medium text-slate-700">
+            Customer message
+          </label>
+          <span className="text-xs tabular-nums text-slate-400">{message.length} chars</span>
+        </div>
+        <textarea
+          id="message"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Paste customer message here…"
+          className="h-40 w-full resize-none rounded-xl border border-slate-200 bg-white p-3.5 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+          disabled={isLoading}
+        />
+
+        {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+
+        <div className="mt-4 flex items-center gap-2">
+          <button onClick={handleAnalyze} disabled={isLoading} className="btn-primary flex-1">
+            {isLoading ? (
+              <>
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Analyzing…
+              </>
+            ) : (
+              'Analyze message'
+            )}
+          </button>
+          <button onClick={handleClear} disabled={isLoading} className="btn-ghost">
+            Clear
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-slate-400">
+          Tip: press <kbd className="rounded border border-slate-200 bg-slate-50 px-1 font-sans">⌘</kbd>
+          +<kbd className="rounded border border-slate-200 bg-slate-50 px-1 font-sans">Enter</kbd> to analyze.
+        </p>
+      </div>
+
+      {/* Results */}
+      {results && (
+        <div className="surface mt-6 p-5">
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Results</h2>
+            <button onClick={handleCopy} className="btn-ghost px-3 py-1.5 text-xs">
+              {copied ? 'Copied ✓' : 'Copy summary'}
+            </button>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex space-x-3">
-            <button
-              onClick={handleAnalyze}
-              disabled={isLoading}
-              className={`flex-1 py-3 rounded-lg font-semibold ${
-                isLoading
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
-            >
-              {isLoading ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Analyzing...
+          {results.source === 'mock' && (
+            <div className="mb-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-inset ring-amber-600/10">
+              AI service was unavailable — this result came from the offline keyword fallback, not the AI model.
+            </div>
+          )}
+
+          {results.urgency === 'High' && (
+            <div className="mb-5 rounded-xl bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 ring-1 ring-inset ring-rose-600/10">
+              High urgency — escalate to a human agent now.
+            </div>
+          )}
+
+          {/* Summary */}
+          {results.summary && (
+            <p className="mb-5 text-base text-slate-800">{results.summary}</p>
+          )}
+
+          {/* Badges */}
+          <div className="mb-6 flex flex-wrap gap-x-6 gap-y-4">
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-slate-400">Category</div>
+              <span className="inline-flex rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 ring-1 ring-inset ring-indigo-600/10">
+                {results.category}
+              </span>
+            </div>
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-slate-400">Urgency</div>
+              <span
+                className={`inline-flex rounded-lg px-3 py-1.5 text-sm font-medium ring-1 ring-inset ${
+                  urgencyStyles[results.urgency] || urgencyStyles.Low
+                }`}
+              >
+                {results.urgency}
+              </span>
+            </div>
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-slate-400">Sentiment</div>
+              <span
+                className={`inline-flex rounded-lg px-3 py-1.5 text-sm font-medium ring-1 ring-inset ${
+                  sentimentStyles[results.sentiment] || sentimentStyles.Neutral
+                }`}
+              >
+                {results.sentiment}
+              </span>
+            </div>
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-slate-400">Route to</div>
+              <span className="inline-flex rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-500/10">
+                {results.team}
+              </span>
+            </div>
+            {typeof results.confidence === 'number' && (
+              <div>
+                <div className="mb-1.5 text-xs font-medium text-slate-400">Confidence</div>
+                <span className="inline-flex rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium tabular-nums text-slate-700 ring-1 ring-inset ring-slate-500/10">
+                  {results.confidence}%
                 </span>
-              ) : (
-                'Analyze Message'
-              )}
-            </button>
-            <button
-              onClick={handleClear}
-              disabled={isLoading}
-              className="px-6 py-3 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50"
-            >
-              Clear
-            </button>
+              </div>
+            )}
+            {results.language && results.language !== 'Unknown' && (
+              <div>
+                <div className="mb-1.5 text-xs font-medium text-slate-400">Language</div>
+                <span className="inline-flex rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-500/10">
+                  {results.language}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Tags */}
+          {results.tags?.length > 0 && (
+            <div className="mb-5 flex flex-wrap gap-1.5">
+              {results.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-md bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500 ring-1 ring-inset ring-slate-200"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Recommended action */}
+          <div className="mb-5">
+            <div className="mb-1.5 text-xs font-medium text-slate-400">Recommended action</div>
+            <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
+              {results.recommendedAction}
+            </p>
+          </div>
+
+          {/* Suggested reply (editable) */}
+          {(replyDraft || results.suggestedReply) && (
+            <div className="mb-5">
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-400">Suggested reply</span>
+                <button onClick={handleCopyReply} className="btn-ghost px-3 py-1 text-xs">
+                  {replyCopied ? 'Copied ✓' : 'Copy reply'}
+                </button>
+              </div>
+              <textarea
+                value={replyDraft}
+                onChange={(e) => setReplyDraft(e.target.value)}
+                className="h-32 w-full resize-none rounded-xl border border-slate-200 bg-white p-3.5 text-sm text-slate-700 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              />
+            </div>
+          )}
+
+          {/* Reasoning */}
+          <div>
+            <div className="mb-1.5 text-xs font-medium text-slate-400">AI reasoning</div>
+            <div className="prose prose-sm max-w-none rounded-xl bg-slate-50 p-4 text-slate-700 prose-p:my-1">
+              <ReactMarkdown>{results.reasoning}</ReactMarkdown>
+            </div>
           </div>
         </div>
-
-        {/* Results Section */}
-        {results && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Analysis Results</h2>
-            
-            <div className="space-y-4">
-              <div>
-                <div className="text-sm font-semibold text-gray-600 mb-1">Category</div>
-                <div className="inline-block bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-semibold">
-                  {results.category}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-sm font-semibold text-gray-600 mb-1">Urgency Level</div>
-                <div className={`inline-block px-4 py-2 rounded-lg font-semibold ${
-                  results.urgency === 'High' ? 'bg-red-200 text-red-900' :
-                  results.urgency === 'Medium' ? 'bg-yellow-200 text-yellow-900' :
-                  'bg-green-200 text-green-900'
-                }`}>
-                  {results.urgency}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-sm font-semibold text-gray-600 mb-1">Recommended Action</div>
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                  <p className="text-gray-800">{results.recommendedAction}</p>
-                </div>
-              </div>
-
-              <div>
-                <div className="text-sm font-semibold text-gray-600 mb-1">AI Reasoning</div>
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <div className="prose prose-sm max-w-none text-gray-700">
-                    <ReactMarkdown>
-                      {results.reasoning}
-                    </ReactMarkdown>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 pt-4 border-t border-gray-200">
-              <button
-                onClick={() => {
-                  const text = `Category: ${results.category}\nUrgency: ${results.urgency}\nRecommendation: ${results.recommendedAction}\n\nReasoning: ${results.reasoning}`
-                  navigator.clipboard.writeText(text)
-                  alert('Results copied to clipboard!')
-                }}
-                className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 font-semibold"
-              >
-                📋 Copy Results
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   )
 }

@@ -1,29 +1,53 @@
 /**
- * Recommendation Templates - Maps categories to recommended actions
+ * Recommendation Templates - Maps categories (and urgency) to recommended actions
  */
 
 const actionTemplates = {
-  "Billing Issue": "Ask user to check billing portal.",
-  "Technical Problem": "Suggest user to restart their browser.",
-  "General Inquiry": "Respond with FAQ link.",
-  "Feature Request": "Ask user to check billing portal.",
-  "Unknown": "Review manually."
+  "Billing Issue": "Direct the customer to the billing portal and verify recent charges on their account.",
+  "Technical Problem": "Gather reproduction steps (browser, time, error message) and check service status before responding.",
+  "General Inquiry": "Answer directly or share the relevant FAQ / documentation link.",
+  "Feature Request": "Thank the customer and log the request for the product team to review.",
+  "Unknown": "Review manually and route to the appropriate team."
 }
 
 /**
- * Get recommended action for a given category
- * 
+ * Get recommended action for a given category and urgency.
+ *
  * @param {string} category - The message category
- * @param {string} urgency - The urgency level
+ * @param {string} [urgency] - The urgency level ("High" | "Medium" | "Low")
  * @returns {string} - Recommended next step
  */
 export function getRecommendedAction(category, urgency) {
-  return actionTemplates[category] || "No recommendation available."
+  const base = actionTemplates[category] || "No recommendation available."
+
+  if (urgency === "High") {
+    return `Escalate to a human agent now — high urgency. ${base}`
+  }
+  return base
+}
+
+// Which team owns each category. Used to auto-route triaged messages.
+const teamRouting = {
+  "Billing Issue": "Billing",
+  "Technical Problem": "Engineering",
+  "Feature Request": "Product",
+  "General Inquiry": "Support",
+  "Unknown": "Support",
+}
+
+/**
+ * Get the team a message should be routed to based on its category.
+ *
+ * @param {string} category - The message category
+ * @returns {string} - Team name
+ */
+export function getTeam(category) {
+  return teamRouting[category] || "Support"
 }
 
 /**
  * Get all available categories
- * 
+ *
  * @returns {string[]} - List of categories
  */
 export function getAvailableCategories() {
@@ -31,13 +55,12 @@ export function getAvailableCategories() {
 }
 
 /**
- * Determines if message should be escalated
- * 
+ * Determines if a message should be escalated to a human agent.
+ *
  * @param {string} category - The message category
  * @param {string} urgency - The urgency level
- * @param {string} message - The original message
  * @returns {boolean} - Whether to escalate
  */
-export function shouldEscalate(category, urgency, message) {
-  return message.length > 100
+export function shouldEscalate(category, urgency) {
+  return urgency === "High" || category === "Unknown"
 }

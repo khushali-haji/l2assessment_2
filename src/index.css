@@ -1,3 +1,43 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-neutral-50 text-slate-900;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  ::selection {
+    @apply bg-indigo-100 text-indigo-900;
+  }
+}
+
+@layer components {
+  /* Surface — the base card used across the app */
+  .surface {
+    @apply bg-white border border-slate-200/70 rounded-2xl;
+  }
+
+  /* Primary action */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5
+           text-sm font-medium text-white transition-colors hover:bg-indigo-700
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2
+           disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400;
+  }
+
+  /* Secondary / ghost action */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white
+           px-4 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50
+           hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300
+           disabled:cursor-not-allowed disabled:opacity-50;
+  }
+}

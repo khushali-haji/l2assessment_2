@@ -11,44 +11,85 @@ const groq = new Groq({
   dangerouslyAllowBrowser: true // Required for browser-based calls (not recommended for production!)
 });
 
+// The fixed set of categories the model is allowed to return. Kept in sync with
+// the recommendation templates so every category maps to an action.
+const CATEGORIES = [
+  "Billing Issue",
+  "Technical Problem",
+  "Feature Request",
+  "General Inquiry",
+  "Unknown",
+];
+
+const SENTIMENTS = ["Positive", "Neutral", "Negative"];
+
+const SYSTEM_PROMPT = `You are a customer support triage assistant. Analyze the customer's message and return a structured assessment.
+
+Allowed categories (use these exact strings):
+- "Billing Issue": payments, invoices, charges, refunds, subscriptions, account billing.
+- "Technical Problem": bugs, errors, outages, broken or non-working functionality.
+- "Feature Request": suggestions, enhancements, or requests for new functionality.
+- "General Inquiry": questions, how-to, general information, or positive feedback.
+- "Unknown": the message is unclear or does not fit the categories above.
+
+Respond ONLY with a JSON object of this exact shape:
+{
+  "category": "<one of the allowed categories>",
+  "sentiment": "<Positive | Neutral | Negative>",
+  "summary": "<a single concise sentence summarizing what the customer wants>",
+  "tags": ["<2-4 short lowercase topic tags>"],
+  "language": "<the language the message is written in, e.g. English>",
+  "confidence": <integer 0-100, your confidence in the category>,
+  "reasoning": "<one or two sentences explaining the classification>",
+  "suggestedReply": "<a polite, ready-to-send draft reply to the customer, 2-4 sentences>"
+}`;
+
 /**
- * Categorize a customer support message using Groq AI
- * 
+ * @typedef {Object} TriageResult
+ * @property {string} category
+ * @property {"Positive"|"Neutral"|"Negative"} sentiment
+ * @property {string} summary
+ * @property {string[]} tags
+ * @property {string} language
+ * @property {number} confidence    0-100
+ * @property {string} reasoning
+ * @property {string} suggestedReply
+ * @property {"ai"|"mock"} source
+ */
+
+/**
+ * Analyze a customer support message using Groq AI.
+ *
  * @param {string} message - The customer support message
- * @returns {Promise<{category: string, reasoning: string}>}
+ * @returns {Promise<TriageResult>}
  */
 export async function categorizeMessage(message) {
   try {
     const response = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
       messages: [
-        {
-          role: "user",
-          content: `Categorize this customer support message: ${message}`
-        }
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: message },
       ],
-      temperature: 0.7,
+      temperature: 0, // deterministic classification
+      response_format: { type: "json_object" },
     });
 
-    const content = response.choices[0].message.content;
-    
-    const lines = content.split('\n');
-    let category = "Unknown";
-    let reasoning = content;
-    
-    if (content.toLowerCase().includes('billing')) {
-      category = "Billing Issue";
-    } else if (content.toLowerCase().includes('technical') || content.toLowerCase().includes('bug')) {
-      category = "Technical Problem";
-    } else if (content.toLowerCase().includes('feature')) {
-      category = "Feature Request";
-    } else if (content.toLowerCase().includes('inquiry') || content.toLowerCase().includes('question')) {
-      category = "General Inquiry";
-    }
-    
+    const content = response.choices[0]?.message?.content ?? "";
+    const parsed = JSON.parse(content);
+
+    const category = CATEGORIES.includes(parsed.category) ? parsed.category : "Unknown";
+
     return {
       category,
-      reasoning: content
+      sentiment: SENTIMENTS.includes(parsed.sentiment) ? parsed.sentiment : "Neutral",
+      summary: cleanString(parsed.summary) || "No summary provided.",
+      tags: normalizeTags(parsed.tags),
+      language: cleanString(parsed.language) || "Unknown",
+      confidence: clampConfidence(parsed.confidence),
+      reasoning: cleanString(parsed.reasoning) || "No reasoning provided by the model.",
+      suggestedReply: cleanString(parsed.suggestedReply) || "",
+      source: "ai",
     };
   } catch (error) {
     console.warn('Groq API failed, using mock response:', error.message);
@@ -56,10 +97,61 @@ export async function categorizeMessage(message) {
   }
 }
 
+function cleanString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeTags(tags) {
+  if (!Array.isArray(tags)) return [];
+  return tags
+    .filter((t) => typeof t === "string" && t.trim())
+    .map((t) => t.trim().toLowerCase())
+    .slice(0, 4);
+}
+
+function clampConfidence(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+// Derived sentiment per category, used only by the offline fallback.
+const MOCK_SENTIMENT = {
+  "Billing Issue": "Negative",
+  "Technical Problem": "Negative",
+  "Feature Request": "Neutral",
+  "General Inquiry": "Neutral",
+  "Unknown": "Neutral",
+};
+
 /**
- * Mock categorization for when API is unavailable
+ * Offline fallback that mirrors the AI result shape using simple keyword rules.
+ * Used when the Groq API is unavailable.
+ *
+ * @param {string} message
+ * @returns {TriageResult}
  */
 function getMockCategorization(message) {
+  const { category, reasoning } = mockClassify(message);
+  const firstSentence = message.trim().split(/(?<=[.!?])\s/)[0] || message.trim();
+
+  return {
+    category,
+    sentiment: MOCK_SENTIMENT[category] || "Neutral",
+    summary: firstSentence.slice(0, 140),
+    tags: [category.split(" ")[0].toLowerCase()],
+    language: "Unknown",
+    confidence: null, // keyword guess — no meaningful confidence
+    reasoning,
+    suggestedReply: "", // the offline fallback does not draft replies
+    source: "mock",
+  };
+}
+
+/**
+ * Keyword-based category guess (offline).
+ */
+function mockClassify(message) {
   const lowerMessage = message.toLowerCase();
   
   // Array of possible reasoning variations for each category

@@ -1,172 +1,242 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 
+const urgencyBadge = {
+  High: 'bg-rose-50 text-rose-700 ring-rose-600/10',
+  Medium: 'bg-amber-50 text-amber-700 ring-amber-600/10',
+  Low: 'bg-emerald-50 text-emerald-700 ring-emerald-600/10',
+}
+
+const CSV_COLUMNS = [
+  'timestamp',
+  'category',
+  'urgency',
+  'sentiment',
+  'team',
+  'confidence',
+  'language',
+  'tags',
+  'message',
+  'summary',
+  'recommendedAction',
+]
+
+function toCsv(rows) {
+  const escape = (value) => {
+    const str = Array.isArray(value) ? value.join('; ') : String(value ?? '')
+    return `"${str.replace(/"/g, '""')}"`
+  }
+  const header = CSV_COLUMNS.join(',')
+  const body = rows.map((row) => CSV_COLUMNS.map((col) => escape(row[col])).join(','))
+  return [header, ...body].join('\n')
+}
+
 function HistoryPage() {
-  const [history, setHistory] = useState([])
+  const [history, setHistory] = useState(
+    () => JSON.parse(localStorage.getItem('triageHistory') || '[]')
+  )
   const [filter, setFilter] = useState('all')
+  const [search, setSearch] = useState('')
   const [expandedIndex, setExpandedIndex] = useState(null)
 
-  useEffect(() => {
-    loadHistory()
-  }, [])
-
-  const loadHistory = () => {
-    const savedHistory = JSON.parse(localStorage.getItem('triageHistory') || '[]')
-    setHistory(savedHistory)
-  }
-
   const clearHistory = () => {
-    if (window.confirm('Are you sure you want to clear all history?')) {
+    if (window.confirm('Clear all analysis history? This cannot be undone.')) {
       localStorage.setItem('triageHistory', '[]')
       setHistory([])
     }
   }
 
-  const sortedHistory = [...history].sort((a, b) => 
-    a.message.localeCompare(b.message)
-  )
-  
-  const filteredHistory = filter === 'all' 
-    ? sortedHistory 
-    : sortedHistory.filter(item => item.category === filter)
+  const exportCsv = () => {
+    const csv = toCsv([...history].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)))
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `triage-history-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
-  const categories = [...new Set(history.map(item => item.category))]
+  // Newest first.
+  const sortedHistory = [...history].sort(
+    (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+  )
+
+  const query = search.trim().toLowerCase()
+  const filteredHistory = sortedHistory.filter((item) => {
+    if (filter !== 'all' && item.category !== filter) return false
+    if (!query) return true
+    const haystack = [item.message, item.summary, item.category, (item.tags || []).join(' ')]
+      .join(' ')
+      .toLowerCase()
+    return haystack.includes(query)
+  })
+
+  const categories = [...new Set(history.map((item) => item.category))]
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-6xl mx-auto px-4">
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Analysis History</h1>
-              <p className="text-gray-600">View and manage past message analyses</p>
-            </div>
-            {history.length > 0 && (
-              <button
-                onClick={clearHistory}
-                className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 font-semibold"
-              >
-                Clear All
-              </button>
-            )}
-          </div>
-
-          {/* Filter Buttons */}
-          {history.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-6">
-              <button
-                onClick={() => setFilter('all')}
-                className={`px-4 py-2 rounded-lg font-semibold ${
-                  filter === 'all'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                All ({history.length})
-              </button>
-              {categories.map(category => (
-                <button
-                  key={category}
-                  onClick={() => setFilter(category)}
-                  className={`px-4 py-2 rounded-lg font-semibold ${
-                    filter === category
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {category} ({history.filter(h => h.category === category).length})
-                </button>
-              ))}
-            </div>
-          )}
+    <div className="mx-auto max-w-3xl px-4 py-12">
+      <header className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">History</h1>
+          <p className="mt-1 text-sm text-slate-500">Review and manage past analyses.</p>
         </div>
-
-        {/* History List */}
-        {filteredHistory.length === 0 && (
-          <div className="bg-white rounded-lg shadow-md p-12 text-center">
-            <div className="text-5xl mb-4">📭</div>
-            <div className="text-xl text-gray-600 mb-2">No history yet</div>
-            <p className="text-gray-500 mb-6">
-              Analyzed messages will appear here
-            </p>
-            <a
-              href="/analyze"
-              className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold"
+        {history.length > 0 && (
+          <div className="flex gap-2">
+            <button onClick={exportCsv} className="btn-ghost">
+              Export CSV
+            </button>
+            <button
+              onClick={clearHistory}
+              className="btn-ghost text-rose-600 hover:bg-rose-50 hover:text-rose-700"
             >
-              Analyze a Message
-            </a>
+              Clear all
+            </button>
           </div>
         )}
+      </header>
 
-        <div className="space-y-4">
-          {filteredHistory.map((item, index) => (
-            <div
-              key={index}
-              className="bg-white rounded-lg shadow-md overflow-hidden"
-            >
-              <div
-                className="p-4 cursor-pointer hover:bg-gray-50"
-                onClick={() => setExpandedIndex(expandedIndex === index ? null : index)}
+      {history.length > 0 && (
+        <>
+          {/* Search */}
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search messages, summaries, tags…"
+            className="mb-4 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+          />
+
+          {/* Filters */}
+          <div className="mb-6 flex flex-wrap gap-2">
+            {[{ name: 'all', count: history.length }, ...categories.map((c) => ({
+              name: c,
+              count: history.filter((h) => h.category === c).length,
+            }))].map((tab) => (
+              <button
+                key={tab.name}
+                onClick={() => setFilter(tab.name)}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                  filter === tab.name
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50'
+                }`}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="text-sm text-gray-500 mb-1">
+                {tab.name === 'all' ? 'All' : tab.name} ({tab.count})
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Empty state */}
+      {filteredHistory.length === 0 ? (
+        <div className="surface flex flex-col items-center justify-center px-6 py-20 text-center">
+          <p className="text-sm text-slate-500">
+            {history.length === 0 ? 'No history yet.' : 'No matches for your search.'}
+          </p>
+          {history.length === 0 && (
+            <Link to="/analyze" className="btn-primary mt-4">
+              Analyze a message
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredHistory.map((item, index) => {
+            const isOpen = expandedIndex === index
+            return (
+              <div key={index} className="surface overflow-hidden">
+                <button
+                  className="flex w-full items-start justify-between gap-4 p-4 text-left transition-colors hover:bg-slate-50"
+                  onClick={() => setExpandedIndex(isOpen ? null : index)}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs text-slate-400">
                       {new Date(item.timestamp).toLocaleString()}
                     </div>
-                    <div className="text-gray-800 font-medium mb-2">
-                      "{item.message.substring(0, 100)}{item.message.length > 100 ? '...' : ''}"
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-semibold">
+                    <p className="mt-1 truncate text-sm font-medium text-slate-800">
+                      {item.summary || item.message}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                         {item.category}
                       </span>
-                      <span className={`text-xs px-3 py-1 rounded-full font-semibold ${
-                        item.urgency === 'High' ? 'bg-red-200 text-red-900' :
-                        item.urgency === 'Medium' ? 'bg-yellow-200 text-yellow-900' :
-                        'bg-green-200 text-green-900'
-                      }`}>
-                        {item.urgency} Urgency
+                      <span
+                        className={`rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
+                          urgencyBadge[item.urgency] || urgencyBadge.Low
+                        }`}
+                      >
+                        {item.urgency}
                       </span>
+                      {item.team && (
+                        <span className="rounded-md bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500 ring-1 ring-inset ring-slate-200">
+                          → {item.team}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <div className="text-gray-400 ml-4">
-                    {expandedIndex === index ? '▲' : '▼'}
-                  </div>
-                </div>
-              </div>
+                  <span className={`mt-1 text-slate-300 transition-transform ${isOpen ? 'rotate-180' : ''}`}>
+                    ▾
+                  </span>
+                </button>
 
-              {expandedIndex === index && (
-                <div className="border-t border-gray-200 p-4 bg-gray-50">
-                  <div className="space-y-3">
+                {isOpen && (
+                  <div className="space-y-4 border-t border-slate-100 bg-slate-50/50 p-4">
                     <div>
-                      <div className="text-xs font-semibold text-gray-600 mb-1">Full Message</div>
-                      <div className="text-sm text-gray-800 bg-white p-3 rounded border border-gray-200">
+                      <div className="mb-1.5 text-xs font-medium text-slate-400">Full message</div>
+                      <p className="rounded-lg bg-white p-3 text-sm text-slate-700 ring-1 ring-inset ring-slate-200">
                         {item.message}
-                      </div>
+                      </p>
                     </div>
+
+                    {(item.sentiment || item.tags?.length > 0) && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {item.sentiment && (
+                          <span className="rounded-md bg-white px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-200">
+                            {item.sentiment}
+                          </span>
+                        )}
+                        {(item.tags || []).map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded-md bg-white px-2 py-0.5 text-xs font-medium text-slate-500 ring-1 ring-inset ring-slate-200"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
                     <div>
-                      <div className="text-xs font-semibold text-gray-600 mb-1">Recommended Action</div>
-                      <div className="text-sm text-gray-800 bg-purple-50 p-3 rounded border border-purple-200">
+                      <div className="mb-1.5 text-xs font-medium text-slate-400">Recommended action</div>
+                      <p className="rounded-lg bg-white p-3 text-sm text-slate-700 ring-1 ring-inset ring-slate-200">
                         {item.recommendedAction}
-                      </div>
+                      </p>
                     </div>
+
+                    {item.suggestedReply && (
+                      <div>
+                        <div className="mb-1.5 text-xs font-medium text-slate-400">Suggested reply</div>
+                        <p className="whitespace-pre-wrap rounded-lg bg-white p-3 text-sm text-slate-700 ring-1 ring-inset ring-slate-200">
+                          {item.suggestedReply}
+                        </p>
+                      </div>
+                    )}
+
                     <div>
-                      <div className="text-xs font-semibold text-gray-600 mb-1">AI Reasoning</div>
-                      <div className="bg-white p-3 rounded border border-gray-200">
-                        <div className="prose prose-sm max-w-none text-gray-700">
-                          <ReactMarkdown>
-                            {item.reasoning}
-                          </ReactMarkdown>
-                        </div>
+                      <div className="mb-1.5 text-xs font-medium text-slate-400">AI reasoning</div>
+                      <div className="prose prose-sm max-w-none rounded-lg bg-white p-3 text-slate-700 ring-1 ring-inset ring-slate-200 prose-p:my-1">
+                        <ReactMarkdown>{item.reasoning}</ReactMarkdown>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            )
+          })}
         </div>
-      </div>
+      )}
     </div>
   )
 }

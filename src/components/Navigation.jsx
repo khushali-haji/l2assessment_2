@@ -1,70 +1,47 @@
 import { Link, useLocation } from 'react-router-dom'
 
+const links = [
+  { to: '/', label: 'Home' },
+  { to: '/analyze', label: 'Analyze' },
+  { to: '/history', label: 'History' },
+  { to: '/dashboard', label: 'Dashboard' },
+]
+
 function Navigation() {
   const location = useLocation()
-  
-  const isActive = (path) => {
-    return location.pathname === path
-  }
+  const isActive = (path) => location.pathname === path
 
   return (
-    <nav className="bg-blue-600 text-white shadow-md">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2 hover:opacity-80">
-            <div className="bg-white rounded-full w-10 h-10 flex items-center justify-center text-2xl">
-              📧
-            </div>
-            <div>
-              <div className="font-bold text-lg">Relay AI</div>
-              <div className="text-xs text-blue-200">Customer Triage</div>
-            </div>
-          </Link>
-
-          {/* Navigation Links */}
-          <div className="flex space-x-1">
-            <Link
-              to="/"
-              className={`px-4 py-2 rounded ${
-                isActive('/') 
-                  ? 'bg-blue-700 font-semibold' 
-                  : 'hover:bg-blue-500'
-              }`}
-            >
-              Home
-            </Link>
-            <Link
-              to="/analyze"
-              className={`px-4 py-2 rounded ${
-                isActive('/analyze') 
-                  ? 'bg-blue-700 font-semibold' 
-                  : 'hover:bg-blue-500'
-              }`}
-            >
-              Analyze
-            </Link>
-            <Link
-              to="/history"
-              className={`px-4 py-2 rounded ${
-                isActive('/history') 
-                  ? 'bg-blue-700 font-semibold' 
-                  : 'hover:bg-blue-500'
-              }`}
-            >
-              History
-            </Link>
-            <Link
-              to="/dashboard"
-              className={`px-4 py-2 rounded ${
-                isActive('/dashboard') 
-                  ? 'bg-blue-700 font-semibold' 
-                  : 'hover:bg-blue-500'
-              }`}
-            >
-              Dashboard
-            </Link>
+    <nav className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/80 backdrop-blur-md">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
+        {/* Logo */}
+        <Link to="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-semibold text-white">
+            R
           </div>
+          <div className="leading-tight">
+            <div className="text-sm font-semibold text-slate-900">Relay AI</div>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+              Customer Triage
+            </div>
+          </div>
+        </Link>
+
+        {/* Links */}
+        <div className="flex items-center gap-1">
+          {links.map(({ to, label }) => (
+            <Link
+              key={to}
+              to={to}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                isActive(to)
+                  ? 'bg-slate-100 text-slate-900'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
         </div>
       </div>
     </nav>
