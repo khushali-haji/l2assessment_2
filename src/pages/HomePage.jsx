@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useMemo } from 'react'
+import { useLiveHistory } from '../hooks/useLiveHistory'
 
 const urgencyBadge = {
   High: 'bg-rose-50 text-rose-700 ring-rose-600/10',
@@ -7,8 +8,7 @@ const urgencyBadge = {
   Low: 'bg-emerald-50 text-emerald-700 ring-emerald-600/10',
 }
 
-function loadHome() {
-  const history = JSON.parse(localStorage.getItem('triageHistory') || '[]')
+function summarize(history) {
   const today = new Date().toDateString()
   const todayCount = history.filter(
     (item) => new Date(item.timestamp).toDateString() === today
@@ -22,7 +22,8 @@ function loadHome() {
 
 function HomePage() {
   const navigate = useNavigate()
-  const [{ stats, recentActivity }] = useState(loadHome)
+  const history = useLiveHistory()
+  const { stats, recentActivity } = useMemo(() => summarize(history), [history])
 
   const tryExample = () => {
     const examples = [
@@ -31,8 +32,9 @@ function HomePage() {
       'Can you add a dark mode feature?',
     ]
     const random = examples[Math.floor(Math.random() * examples.length)]
-    localStorage.setItem('exampleMessage', random)
-    navigate('/analyze')
+    // Router state rather than localStorage: the value belongs to this one
+    // navigation, and a stale key can otherwise resurface on a later visit.
+    navigate('/analyze', { state: { message: random } })
   }
 
   return (

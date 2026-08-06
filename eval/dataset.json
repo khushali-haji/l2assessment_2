@@ -1,0 +1,48 @@
+{
+  "rubric": {
+    "High": "The customer is blocked from doing something important, data or account security is at risk, many people are affected, or support has already failed to respond. Needs a human now.",
+    "Medium": "A real defect that impedes normal use, but the customer can keep working or has a workaround. Needs a fix, not an interrupt.",
+    "Low": "Nothing is broken: a question, a request, praise, or a problem the customer has already resolved."
+  },
+  "note": "Labels are the triage a support lead would apply, assigned independently of what the scorer currently outputs. Cases the scorer gets wrong are kept in the set, not relabelled.",
+  "cases": [
+    { "id": 1,  "urgency": "High",   "category": "Technical Problem", "message": "Our production server is down" },
+    { "id": 2,  "urgency": "High",   "category": "Technical Problem", "message": "Database connection lost" },
+    { "id": 3,  "urgency": "High",   "category": "Technical Problem", "message": "Server down now" },
+    { "id": 4,  "urgency": "High",   "category": "Technical Problem", "message": "Our whole team has been unable to log in since this morning." },
+    { "id": 5,  "urgency": "High",   "category": "Technical Problem", "message": "URGENT: all of our customers are seeing a 500 error on checkout." },
+    { "id": 6,  "urgency": "High",   "category": "Technical Problem", "message": "I think someone else accessed my account — there are logins from a country I have never been to." },
+    { "id": 7,  "urgency": "High",   "category": "Technical Problem", "message": "We have lost all the reports from last quarter, they are just gone from the dashboard." },
+    { "id": 8,  "urgency": "High",   "category": "Billing Issue",     "message": "I have been charged twice for the same month and nobody has replied in 4 days." },
+    { "id": 9,  "urgency": "High",   "category": "Billing Issue",     "message": "My payment failed and now I can't access the dashboard. Is there a bug or do I need to update my credit card?" },
+    { "id": 10, "urgency": "High",   "category": "Technical Problem", "message": "Our staging environment is fine but production is throwing 502s for about 20% of requests." },
+    { "id": 11, "urgency": "High",   "category": "Technical Problem", "message": "I can't access my account and I have a client demo in an hour." },
+    { "id": 12, "urgency": "High",   "category": "General Inquiry",   "message": "THIS IS COMPLETELY UNACCEPTABLE!!! I HAVE BEEN WAITING FOR THREE DAYS!!!" },
+
+    { "id": 13, "urgency": "Medium", "category": "Technical Problem", "message": "The app crashes every time I open the settings page." },
+    { "id": 14, "urgency": "Medium", "category": "Technical Problem", "message": "The dashboard won't load when I try to access it. I've tried refreshing but it keeps timing out." },
+    { "id": 15, "urgency": "Medium", "category": "Technical Problem", "message": "Export to PDF is broken — the file downloads but it is empty." },
+    { "id": 16, "urgency": "Medium", "category": "Technical Problem", "message": "The search results are really slow, it takes about 10 seconds to load anything." },
+    { "id": 17, "urgency": "Medium", "category": "Billing Issue",     "message": "I tried to update my payment method but the page keeps loading forever. Is this a known issue?" },
+    { "id": 18, "urgency": "Medium", "category": "Technical Problem", "message": "Getting a validation error when I try to save my profile picture." },
+    { "id": 19, "urgency": "Medium", "category": "Technical Problem", "message": "Notifications stopped working after the last update." },
+
+    { "id": 20, "urgency": "Low",    "category": "Billing Issue",     "message": "How do I download my invoice?" },
+    { "id": 21, "urgency": "Low",    "category": "Billing Issue",     "message": "I'd like to downgrade my subscription to the basic plan." },
+    { "id": 22, "urgency": "Low",    "category": "General Inquiry",   "message": "Where can I change my security question?" },
+    { "id": 23, "urgency": "Low",    "category": "Billing Issue",     "message": "Can I upgrade my subscription to the pro plan?" },
+    { "id": 24, "urgency": "Low",    "category": "General Inquiry",   "message": "What are your business hours?" },
+    { "id": 25, "urgency": "Low",    "category": "Feature Request",   "message": "I would love to see a dark mode option in the app. It would be much easier on my eyes during night time usage." },
+    { "id": 26, "urgency": "Low",    "category": "Feature Request",   "message": "Could you add an export to CSV feature? Would be really useful for my monthly reports." },
+    { "id": 27, "urgency": "Low",    "category": "General Inquiry",   "message": "Hi there! I just wanted to say thank you for your amazing customer service. I've been using your product for three years now and I'm really happy with it. Keep up the great work!" },
+    { "id": 28, "urgency": "Low",    "category": "General Inquiry",   "message": "Thank you so much! Your team has been incredibly helpful and I really appreciate the fast response to my question earlier today!" },
+    { "id": 29, "urgency": "Low",    "category": "General Inquiry",   "message": "Hi! I was just browsing through your website and noticed you have a really nice design! I especially like the color scheme and the way you've organized the navigation menu! Everything looks so professional and clean! Just wanted to share my positive feedback!" },
+    { "id": 30, "urgency": "Low",    "category": "Technical Problem", "message": "Good news — the server is not down anymore, you can close the ticket." },
+    { "id": 31, "urgency": "Low",    "category": "Technical Problem", "message": "Never mind, I figured it out. The error was on my end." },
+    { "id": 32, "urgency": "Low",    "category": "Unknown",           "message": "hi" },
+    { "id": 33, "urgency": "Low",    "category": "Billing Issue",     "message": "No issues at all, just confirming the invoice looks right. Thanks!" },
+    { "id": 34, "urgency": "Low",    "category": "Feature Request",   "message": "Is there a way to schedule the weekly report so it emails automatically?" },
+    { "id": 35, "urgency": "Low",    "category": "General Inquiry",   "message": "Quick question — does the pro plan include SSO?" },
+    { "id": 36, "urgency": "Low",    "category": "General Inquiry",   "message": "Just a heads up, there's a typo on your pricing page (it says 'montly')." }
+  ]
+}

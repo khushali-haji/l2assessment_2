@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useMemo } from 'react'
+import { useLiveHistory } from '../hooks/useLiveHistory'
 
 const urgencyMeta = {
   High: { dot: 'bg-rose-500', text: 'text-rose-600' },
@@ -6,8 +7,7 @@ const urgencyMeta = {
   Low: { dot: 'bg-emerald-500', text: 'text-emerald-600' },
 }
 
-function loadDashboard() {
-  const history = JSON.parse(localStorage.getItem('triageHistory') || '[]')
+function summarize(history) {
   const today = new Date().toDateString()
   const todayMessages = history.filter(
     (item) => new Date(item.timestamp).toDateString() === today
@@ -40,7 +40,8 @@ function loadDashboard() {
 }
 
 function DashboardPage() {
-  const [{ stats, categoryData, urgencyData }] = useState(loadDashboard)
+  const history = useLiveHistory()
+  const { stats, categoryData, urgencyData } = useMemo(() => summarize(history), [history])
 
   const statCards = [
     { label: 'Total messages', value: stats.total },
@@ -57,7 +58,7 @@ function DashboardPage() {
       </header>
 
       {/* Stat cards */}
-      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="stagger mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         {statCards.map((card) => (
           <div key={card.label} className="surface p-5">
             <div className="text-sm text-slate-500">{card.label}</div>

@@ -40,4 +40,67 @@
            hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300
            disabled:cursor-not-allowed disabled:opacity-50;
   }
+
+  /* Entrance for content that arrives after a wait (results, streamed rows).
+     Long enough and far enough to actually register: on the Analyze page the
+     panel animates while the page is smooth-scrolling toward it, and a shorter,
+     smaller move is completely masked by the scroll. */
+  .animate-rise {
+    animation: rise 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Lists read as a sequence rather than one simultaneous flash. The stagger is
+     what makes list motion perceptible at all; capped so a long batch does not
+     leave the last row waiting. */
+  .stagger > * {
+    animation: rise 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger > *:nth-child(2) { animation-delay: 45ms; }
+  .stagger > *:nth-child(3) { animation-delay: 90ms; }
+  .stagger > *:nth-child(4) { animation-delay: 135ms; }
+  .stagger > *:nth-child(5) { animation-delay: 180ms; }
+  .stagger > *:nth-child(6) { animation-delay: 225ms; }
+  .stagger > *:nth-child(n + 7) { animation-delay: 270ms; }
+
+  /* Placeholder block for skeleton loading states. */
+  .skeleton {
+    @apply animate-pulse rounded-lg bg-slate-200/70;
+  }
+
+  /* Focus target for programmatically focused panels: the ring would otherwise
+     read as a stray outline on a non-interactive element. */
+  .focus-panel:focus {
+    @apply outline-none;
+  }
+  .focus-panel:focus-visible {
+    @apply ring-2 ring-indigo-200;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Respect the OS setting: motion is decoration here, never the only cue. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .stagger > *,
+  .animate-pulse,
+  .animate-spin {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
 }

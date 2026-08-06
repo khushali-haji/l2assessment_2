@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
+import { loadHistory, clearHistory as clearStoredHistory } from '../utils/history'
 
 const urgencyBadge = {
   High: 'bg-rose-50 text-rose-700 ring-rose-600/10',
@@ -33,16 +34,14 @@ function toCsv(rows) {
 }
 
 function HistoryPage() {
-  const [history, setHistory] = useState(
-    () => JSON.parse(localStorage.getItem('triageHistory') || '[]')
-  )
+  const [history, setHistory] = useState(loadHistory)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
-  const [expandedIndex, setExpandedIndex] = useState(null)
+  const [expandedKey, setExpandedKey] = useState(null)
 
   const clearHistory = () => {
     if (window.confirm('Clear all analysis history? This cannot be undone.')) {
-      localStorage.setItem('triageHistory', '[]')
+      clearStoredHistory()
       setHistory([])
     }
   }
@@ -142,14 +141,19 @@ function HistoryPage() {
           )}
         </div>
       ) : (
-        <div className="space-y-3">
-          {filteredHistory.map((item, index) => {
-            const isOpen = expandedIndex === index
+        <div className="stagger space-y-3">
+          {filteredHistory.map((item) => {
+            // Keyed by identity, not array position: filtering or searching
+            // reorders the list, and a positional key would leave a different
+            // row expanded than the one that was clicked.
+            const key = `${item.timestamp}-${item.message.slice(0, 32)}`
+            const isOpen = expandedKey === key
             return (
-              <div key={index} className="surface overflow-hidden">
+              <div key={key} className="surface overflow-hidden">
                 <button
                   className="flex w-full items-start justify-between gap-4 p-4 text-left transition-colors hover:bg-slate-50"
-                  onClick={() => setExpandedIndex(isOpen ? null : index)}
+                  aria-expanded={isOpen}
+                  onClick={() => setExpandedKey(isOpen ? null : key)}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="text-xs text-slate-400">

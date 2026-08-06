@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
-import { categorizeMessage } from '../utils/llmHelper'
-import { calculateUrgency } from '../utils/urgencyScorer'
-import { getRecommendedAction, getTeam } from '../utils/templates'
+import { levelForScore } from '../utils/urgencyScorer'
+import { triageMessage } from '../utils/triage'
+import { appendHistory } from '../utils/history'
+import AutoTextarea from '../components/AutoTextarea'
+import ResultsSkeleton from '../components/ResultsSkeleton'
 
 const urgencyStyles = {
   High: 'bg-rose-50 text-rose-700 ring-rose-600/20',
@@ -25,13 +28,29 @@ function AnalyzePage() {
   const [copied, setCopied] = useState(false)
   const [replyCopied, setReplyCopied] = useState(false)
 
+  const resultsRef = useRef(null)
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  // A message handed over by another page (e.g. "Try an example") arrives in
+  // router state. Clearing it prevents the same example reappearing on reload.
   useEffect(() => {
-    const exampleMessage = localStorage.getItem('exampleMessage')
-    if (exampleMessage) {
-      setMessage(exampleMessage)
-      localStorage.removeItem('exampleMessage')
+    const handedOver = location.state?.message
+    if (handedOver) {
+      setMessage(handedOver)
+      navigate(location.pathname, { replace: true, state: null })
     }
-  }, [])
+  }, [location.pathname, location.state, navigate])
+
+  // Bring the result into view and move focus to it. Without this the result
+  // renders below the fold and the page looks unchanged after a 2-5s wait.
+  useEffect(() => {
+    if (!results || !resultsRef.current) return
+    // 'nearest' keeps the scroll short, so the panel's entrance animation is
+    // not swallowed by a long smooth-scroll happening at the same time.
+    resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    resultsRef.current.focus({ preventScroll: true })
+  }, [results])
 
   const handleAnalyze = async () => {
     if (!message.trim()) {
@@ -44,26 +63,17 @@ function AnalyzePage() {
     setResults(null)
 
     try {
-      const analysis = await categorizeMessage(message)
-      const urgency = calculateUrgency(message)
-      const recommendedAction = getRecommendedAction(analysis.category, urgency)
-      const team = getTeam(analysis.category)
-
-      const analysisResult = {
-        message,
-        ...analysis,
-        urgency,
-        recommendedAction,
-        team,
-        timestamp: new Date().toISOString(),
-      }
+      const analysisResult = await triageMessage(message)
 
       setResults(analysisResult)
       setReplyDraft(analysisResult.suggestedReply || '')
 
-      const history = JSON.parse(localStorage.getItem('triageHistory') || '[]')
-      history.push(analysisResult)
-      localStorage.setItem('triageHistory', JSON.stringify(history))
+      // Persisting is deliberately after the result is on screen: a full storage
+      // quota must not make a successful analysis look like a failed one.
+      const { saved, error: saveError } = appendHistory([analysisResult])
+      if (!saved) {
+        setError(`Analyzed, but could not save to History: ${saveError}`)
+      }
     } catch (err) {
       console.error('Error analyzing message:', err)
       setError('Something went wrong while analyzing. Please try again.')
@@ -117,17 +127,20 @@ function AnalyzePage() {
           </label>
           <span className="text-xs tabular-nums text-slate-400">{message.length} chars</span>
         </div>
-        <textarea
+        <AutoTextarea
           id="message"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Paste customer message here…"
-          className="h-40 w-full resize-none rounded-xl border border-slate-200 bg-white p-3.5 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           disabled={isLoading}
         />
 
-        {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+        {error && (
+          <p role="alert" className="mt-2 text-sm text-rose-600">
+            {error}
+          </p>
+        )}
 
         <div className="mt-4 flex items-center gap-2">
           <button onClick={handleAnalyze} disabled={isLoading} className="btn-primary flex-1">
@@ -153,9 +166,15 @@ function AnalyzePage() {
         </p>
       </div>
 
+      {isLoading && <ResultsSkeleton />}
+
       {/* Results */}
-      {results && (
-        <div className="surface mt-6 p-5">
+      <div aria-live="polite" aria-atomic="false">
+        {results && (
+        <div
+          ref={resultsRef}
+          tabIndex={-1}
+          className="focus-panel surface animate-rise mt-6 p-5">
           <div className="mb-5 flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Results</h2>
             <button onClick={handleCopy} className="btn-ghost px-3 py-1.5 text-xs">
@@ -172,6 +191,17 @@ function AnalyzePage() {
           {results.urgency === 'High' && (
             <div className="mb-5 rounded-xl bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 ring-1 ring-inset ring-rose-600/10">
               High urgency — escalate to a human agent now.
+            </div>
+          )}
+
+          {/* When the model and the text rules read the message differently, say so
+              rather than quietly averaging them — it usually means a genuinely
+              ambiguous message that deserves a human glance. */}
+          {results.urgencyDetail?.divergent && (
+            <div className="mb-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-inset ring-amber-600/10">
+              Signals disagree — the AI read this as {levelForScore(results.urgencyDetail.aiScore)}{' '}
+              urgency while the text rules read it as{' '}
+              {levelForScore(results.urgencyDetail.ruleScore)}. Worth a second look.
             </div>
           )}
 
@@ -197,6 +227,12 @@ function AnalyzePage() {
               >
                 {results.urgency}
               </span>
+              {results.urgencyDetail && (
+                <div className="mt-1 text-xs tabular-nums text-slate-400">
+                  {results.urgencyDetail.score}/100 ·{' '}
+                  {results.urgencyDetail.basis === 'hybrid' ? 'AI + rules' : 'rules only'}
+                </div>
+              )}
             </div>
             <div>
               <div className="mb-1.5 text-xs font-medium text-slate-400">Sentiment</div>
@@ -263,10 +299,11 @@ function AnalyzePage() {
                   {replyCopied ? 'Copied ✓' : 'Copy reply'}
                 </button>
               </div>
-              <textarea
+              <AutoTextarea
                 value={replyDraft}
                 onChange={(e) => setReplyDraft(e.target.value)}
-                className="h-32 w-full resize-none rounded-xl border border-slate-200 bg-white p-3.5 text-sm text-slate-700 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                minHeight={128}
+                className="text-slate-700"
               />
             </div>
           )}
@@ -279,7 +316,8 @@ function AnalyzePage() {
             </div>
           </div>
         </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

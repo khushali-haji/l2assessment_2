@@ -1,119 +1,150 @@
-# Getting Your Free Groq API Key
+# Setting Up Your LLM API Key
 
-## Why Groq?
+The app talks to any **OpenAI-compatible chat-completions endpoint**. OpenRouter is the default —
+one key gives access to models from every major provider, which matters here because
+`npm run eval:hybrid` lets you compare them on real triage accuracy.
 
-✅ **Completely Free** - No credit card required  
-✅ **Fast** - Groq's LPU technology provides incredibly fast inference  
-✅ **Generous Limits** - ~14,400 requests/day on free tier  
-✅ **High Quality** - Llama 3.3 70B model performs excellently  
+## Step-by-Step Setup (OpenRouter)
 
-## Step-by-Step Setup
+### 1. Get Your API Key
 
-### 1. Sign Up for Groq
+1. Go to https://openrouter.ai/keys
+2. Sign in (Google/GitHub/email)
+3. Click **Create Key**, give it a name (e.g. "Customer Triage App")
+4. **Copy the key** — it starts with `sk-or-v1-`
 
-Visit: https://console.groq.com
+Save it somewhere safe; you won't be able to see it again.
 
-- Click "Sign Up" or "Get Started"
-- Use your email or sign in with Google/GitHub
-- **No credit card required!**
+### 1a. Give the Key a Spend Limit
 
-### 2. Get Your API Key
+By default a new key can be created with a limit of `0`, which blocks every paid model with
+`403 Key limit exceeded` even though the key itself is valid. At
+https://openrouter.ai/settings/keys, set the key's limit above zero (and add account credit).
 
-Once logged in:
+To skip this entirely, use a free model — see [Choosing a Model](#choosing-a-model). Free models
+work even on a zero-limit key, but are heavily rate limited.
 
-1. Go to: https://console.groq.com/keys
-2. Click "Create API Key"
-3. Give it a name (e.g., "Customer Triage App")
-4. Click "Submit"
-5. **Copy the API key** - it starts with `gsk_`
+### 2. Add It to Your Project
 
-**Important**: Save this key somewhere safe! You won't be able to see it again.
-
-### 3. Add to Your Project
-
-1. Open the project folder
-2. Create or edit the `.env.local` file in the root directory
-3. Add your key:
+Create or edit **`.env.local`** in the project root — the same folder as `package.json`:
 
 ```
-VITE_GROQ_API_KEY=gsk_your-actual-key-here
+VITE_LLM_API_KEY=sk-or-v1-your-actual-key-here
 ```
 
-4. Save the file
-5. Restart the dev server:
+That's the only required line. If the file still has a `VITE_GROQ_API_KEY=...` line, delete it —
+it is no longer read.
+
+⚠️ **Check the capitalisation.** OpenRouter keys are entirely lowercase and begin `sk-or-v1-`.
+Editors and phone keyboards like to autocapitalise the first letter, and `Sk-or-v1-…` fails with a
+misleading `401 Missing Authentication header` rather than an obvious "bad key".
+
+### 3. Restart the Dev Server
+
+Vite only reads `.env.local` at startup, so the change needs a restart:
 
 ```bash
 npm run dev
 ```
 
-### 4. Test It Out
+### 4. Test It
 
 1. Open http://localhost:5173
-2. Go to the "Analyze" tab
-3. Paste a test message: "Our server is down"
-4. Click "Analyze Message"
-5. You should see AI-powered results!
+2. Go to the **Analyze** tab
+3. Paste `Our production server is down` and click **Analyze message**
+4. Under the Urgency badge you should see **"AI + rules"** — that confirms the key is working.
+   If it says **"rules only"**, the API call failed and you're seeing the offline fallback (the
+   results panel shows an amber banner explaining this).
+
+You can also verify from the terminal, which prints the exact error on failure:
+
+```bash
+npm run eval:hybrid
+```
+
+## Choosing a Model
+
+The default is `meta-llama/llama-3.3-70b-instruct`. To use a different one, add to `.env.local`:
+
+```
+VITE_LLM_MODEL=anthropic/claude-sonnet-4.5
+```
+
+Browse available IDs at https://openrouter.ai/models. Free options (no credit needed, but tightly
+rate limited — a 36-case eval run will hit 429s partway through) include `openai/gpt-oss-20b:free`
+and `nvidia/nemotron-3-super-120b-a12b:free`. Since triage quality *is* the product, the
+useful way to pick is to measure rather than guess:
+
+```bash
+VITE_LLM_MODEL=meta-llama/llama-3.3-70b-instruct npm run eval:hybrid
+VITE_LLM_MODEL=anthropic/claude-sonnet-4.5       npm run eval:hybrid
+```
+
+Compare the urgency and category accuracy each reports on the same 36 labelled messages.
+
+## Using a Different Provider
+
+Override the base URL to point anywhere OpenAI-compatible:
+
+```
+# Groq
+VITE_LLM_BASE_URL=https://api.groq.com
+VITE_LLM_MODEL=llama-3.3-70b-versatile
+VITE_LLM_API_KEY=gsk_your-key-here
+```
+
+The same three variables are read by both the app and the eval harness.
 
 ## Troubleshooting
 
-### "Missing credentials" Error
+### Results always say "rules only"
 
-**Problem**: The app can't find your API key
+The API call is failing and the app has fallen back to offline keyword scoring. Check the browser
+console for the reason, or run `npm run eval:hybrid` to see the raw error. Usual causes:
 
-**Solution**:
-- Make sure file is named `.env.local` (not `.env`)
-- Check that the key starts with `gsk_`
-- Restart the dev server after adding the key
-- Make sure there are no extra spaces in the file
+- The file is named `.env` instead of `.env.local`
+- The dev server wasn't restarted after adding the key
+- Stray quotes or spaces around the value
 
-### "Rate limit exceeded" Error
+### 401 Unauthorized / `expired_api_key`
 
-**Problem**: You've hit the free tier limit
+The key is invalid, revoked, or expired. Generate a fresh one at https://openrouter.ai/keys and
+replace the value in `.env.local`.
 
-**Solutions**:
-- Wait a few minutes and try again
-- Create a new Groq account with a different email
-- Use the built-in mock responses (automatic fallback)
+### 402 Payment Required / 403 Key limit exceeded
 
-### Key Not Working
+The model costs money and the key cannot spend any. Either raise the key's limit and add credit at
+https://openrouter.ai/settings/keys, or switch to a free model:
 
-**Problem**: API returns 401 Unauthorized
+```
+VITE_LLM_MODEL=openai/gpt-oss-20b:free
+```
 
-**Solution**:
-- Regenerate a new key at https://console.groq.com/keys
-- Delete the old key
-- Update `.env.local` with the new key
-- Restart dev server
+Note that `:free` variants come and go — `meta-llama/llama-3.3-70b-instruct:free`, for instance, is
+no longer free and now returns a 404. List what is currently free with:
+
+```bash
+node -e 'fetch("https://openrouter.ai/api/v1/models").then(r=>r.json()).then(({data})=>data.filter(m=>+m.pricing.prompt===0&&+m.pricing.completion===0).forEach(m=>console.log(m.id)))'
+```
+
+### 429 Rate limit exceeded
+
+Wait a minute and retry. Free models have tight limits, and `npm run eval:hybrid` makes 36 calls in
+a row, which can trip them.
 
 ## Mock Mode (No API Key Needed)
 
-If you don't want to use an API key, the app automatically falls back to **mock responses** when:
-- No API key is configured
-- API key is invalid
-- Rate limit is exceeded
+With no key — or whenever the API call fails — the app falls back to offline keyword categorization
+and rules-only urgency scoring, and says so in the UI. Nothing crashes, but classification quality
+drops significantly, so it is a safety net rather than a way to run the app.
 
-The mock mode uses realistic keyword-based categorization and works offline!
+The rules-only evaluation needs no key at all:
 
-## Free Tier Limits
-
-Groq's free tier includes:
-
-- **~14,400 requests per day**
-- **30 requests per minute**
-- Access to multiple models including:
-  - Llama 3.3 70B (what this app uses)
-  - Llama 3.1 8B
-  - Mixtral 8x7B
-  - Gemma 2 9B
-
-This is more than enough for development and testing!
+```bash
+npm run eval
+```
 
 ## Need Help?
 
-- Groq Documentation: https://console.groq.com/docs
-- Groq Discord: https://groq.com/discord
-- Project README: See `README.md` in this folder
-
----
-
-**Happy Triaging! 🚀**
+- OpenRouter docs: https://openrouter.ai/docs
+- Project README: see `README.md` in this folder
